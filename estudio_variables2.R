@@ -620,3 +620,4 @@ n_foton %>%
   labs(x = "Número de fotones por evento", y = "Fracción de eventos") +
   theme_classic()
 
+#oleoleole
