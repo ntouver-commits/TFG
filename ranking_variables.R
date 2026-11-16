@@ -32,9 +32,8 @@ poder_separacion <- function(datos, var) {
              test1 = (mS - mB) / sqrt(sS^2 + sB^2))
 }
 
-# Variables numéricas a comparar (ajusta los nombres a tus columnas)
+# Variables numéricas a comparar
 vars <- c("trackScore", "elScore", "phoScore", "showerOpAngle", "pScore", "showerdEdx")
-vars <- intersect(vars, names(data_min_trackScore))   # por si alguna no existe
 
 resultados1 <- bind_rows(lapply(vars, poder_separacion, datos = data_min_trackScore)) %>%
   mutate(abs_test1 = abs(test1)) %>%
@@ -66,28 +65,67 @@ res_pe <- bind_rows(lapply(vars, producto_escalar, datos = data_min_trackScore))
   arrange(prod_escalar)    # de menor a mayor solapamiento
 res_pe
 
-#Chi^2
+#Test Kolmogorov-Smirnov
 
-table(data_min_trackScore$clase)
 
-signal <- data_min_trackScore[data_min_trackScore$clase == "Signal", ]
-background <- data_min_trackScore[data_min_trackScore$clase == "Background", ]
+ks_D <- function(datos, var) {
+  x <- datos[[var]]
+  ok <- !is.na(x)
+  x <- x[ok]
+  es_senal <- datos$nPi0[ok] == 1
+  
+  S <- x[es_senal]       # valores de la variable en señal
+  B <- x[!es_senal]      # valores de la variable en background
+  
+  FS <- ecdf(S)          # acumulada de señal
+  FB <- ecdf(B)          # acumulada de background
+  
+  puntos <- sort(unique(c(S, B)))     # valores donde evaluar
+  dif <- FS(puntos) - FB(puntos)      # diferencia con signo
+  i <- which.max(abs(dif))            # posición de la máxima separación
+  
+  data.frame(variable = var,
+             D = abs(dif[i]),
+             x_max = puntos[i],
+             senal_tiende_a = ifelse(dif[i] > 0, "valores bajos", "valores altos"),
+             D_ks_test = unname(suppressWarnings(ks.test(S, B)$statistic)))
+}
 
-# Crear 10 intervalos
-breaks <- seq(
-  min(data_min_trackScore$trackScore, na.rm = TRUE),
-  max(data_min_trackScore$trackScore, na.rm = TRUE),
-  length.out = 11
-)
+vars <- c("trackScore", "phoScore", "elScore", "showerdEdx", "showerOpAngle", "pScore")  # ajusta a tus columnas
+vars <- intersect(vars, names(data_min_trackScore))
 
-data_min_trackScore$bin <- cut(data_min_trackScore$trackScore, breaks = breaks,
-                 include.lowest = TRUE)
+res_ks <- bind_rows(lapply(vars, ks_D, datos = data_min_trackScore)) %>%
+  arrange(desc(D))
 
-# Tabla de contingencia
-tabla <- table(data_min_trackScore$bin, data_min_trackScore$clase)
+res_ks
 
-# Test chi-cuadrado
-chi <- chisq.test(tabla)
 
-chi$statistic
-chi$p.value
+#Test chi cuadrado
+
+chi2_R <- function(datos, var, nbins = 40) {
+  x <- datos[[var]]
+  ok <- !is.na(x)
+  x <- x[ok]
+  es_senal <- datos$nPi0[ok] == 1
+  
+  breaks <- seq(min(x), max(x), length.out = nbins + 1)
+  bin <- cut(x, breaks = breaks, include.lowest = TRUE)
+  
+  S_i <- as.numeric(table(bin[es_senal]))     # señal por bin   -> p
+  B_i <- as.numeric(table(bin[!es_senal]))    # background por bin -> x
+  
+  usar <- S_i > 0      # un bin con S_i = 0 tendría esperado 0 y daría chi2 infinito
+  
+  test <- suppressWarnings(chisq.test(x = B_i[usar], p = S_i[usar], rescale.p = TRUE))
+  
+  data.frame(variable = var,
+             chi2 = unname(test$statistic),
+             gl = unname(test$parameter),
+             p_valor = test$p.value,
+             chi2_norm = unname(test$statistic) / sum(B_i),    # para comparar entre variables
+             frac_B_descartado = sum(B_i[!usar]) / sum(B_i))
+}
+
+res_chi2_R <- bind_rows(lapply(vars, chi2_R, datos = data_min_trackScore, nbins = 20)) %>%
+  arrange(desc(chi2_norm))
+res_chi2_R
