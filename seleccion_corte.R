@@ -34,8 +34,6 @@ res_cortes <- bind_rows(lapply(cortes, funcion_cortes))
 res_cortes[which.max(res_cortes$prod), ]   # corte óptimo
 
 
-library(ggplot2); library(tidyr)
-
 mejor <- res_cortes[which.max(res_cortes$prod), ]
 
 res_cortes %>%
@@ -48,3 +46,33 @@ res_cortes %>%
   theme_bw()
 
 
+#Ahora lo hacemos para phoScore. En este caso, la señal seleccionada será por encima
+#del corte.
+
+phoScore_senal <- data_min_trackScore$phoScore[data_min_trackScore$nPi0 == 1]
+phoScore_bckg <- data_min_trackScore$phoScore[data_min_trackScore$nPi0 != 1]
+cortes2 <- seq(min(data_min_trackScore$phoScore), max(data_min_trackScore$phoScore), length.out = 200)
+
+
+funcion_cortes_PS <- function(corte) {
+  S_sel <- sum(phoScore_senal > corte)
+  B_sel <- sum(phoScore_bckg  > corte)
+  eff2 <- S_sel / length(phoScore_senal)
+  pur2 <- if (S_sel + B_sel > 0) S_sel / (S_sel + B_sel) else NA
+  data.frame(corte = corte, eff = eff2, pur = pur2, prod = eff2 * pur2)
+}
+
+res_cortes2 <- bind_rows(lapply(cortes2, funcion_cortes_PS))
+res_cortes2[which.max(res_cortes2$prod), ]   # corte óptimo
+
+
+mejor2 <- res_cortes2[which.max(res_cortes2$prod), ]
+
+res_cortes2 %>%
+  pivot_longer(c(eff, pur, prod), names_to = "magnitud", values_to = "valor") %>%
+  ggplot(aes(corte, valor, colour = magnitud)) +
+  geom_line() +
+  geom_vline(xintercept = mejor2$corte, linetype = "dashed") +
+  labs(x = "Corte en phoScore", y = NULL, colour = NULL,
+       title = paste0("Corte óptimo = ", round(mejor2$corte, 3))) +
+  theme_bw()
