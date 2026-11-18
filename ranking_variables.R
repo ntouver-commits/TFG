@@ -41,6 +41,8 @@ resultados1 <- bind_rows(lapply(vars, poder_separacion, datos = data_min_trackSc
 
 resultados1
 
+#Producto escalar
+
 producto_escalar <- function(datos, var, nbins = 50) {
   x <- datos[[var]]
   S <- x[datos$nPi0 == 1]; S <- S[!is.na(S)]
@@ -52,12 +54,11 @@ producto_escalar <- function(datos, var, nbins = 50) {
   
   fS <- hist(S, breaks = breaks, plot = FALSE)$density
   fB <- hist(B, breaks = breaks, plot = FALSE)$density
-  
-  int_SB <- sum(fS * fB * dx)   # Integral(S * B)
-  int_S  <- sum(fS * dx)        # Integral(S)
-  int_B  <- sum(fB * dx)        # Integral(B)
-  
-  data.frame(variable = var, prod_escalar = int_SB / (int_S * int_B))
+
+  int_SB <- sum(fS * fB * dx)
+  int_SS <- sum(fS^2 * dx)
+  int_BB <- sum(fB^2 * dx)
+  data.frame(variable = var, prod_escalar = int_SB / sqrt(int_SS * int_BB))
 }
 
 
@@ -66,7 +67,6 @@ res_pe <- bind_rows(lapply(vars, producto_escalar, datos = data_min_trackScore))
 res_pe
 
 #Test Kolmogorov-Smirnov
-
 
 ks_D <- function(datos, var) {
   x <- datos[[var]]
@@ -77,27 +77,31 @@ ks_D <- function(datos, var) {
   S <- x[es_senal]       # valores de la variable en señal
   B <- x[!es_senal]      # valores de la variable en background
   
-  FS <- ecdf(S)          # acumulada de señal
-  FB <- ecdf(B)          # acumulada de background
-  
-  puntos <- sort(unique(c(S, B)))     # valores donde evaluar
-  dif <- FS(puntos) - FB(puntos)      # diferencia con signo
-  i <- which.max(abs(dif))            # posición de la máxima separación
-  
   data.frame(variable = var,
-             D = abs(dif[i]),
-             x_max = puntos[i],
-             senal_tiende_a = ifelse(dif[i] > 0, "valores bajos", "valores altos"),
              D_ks_test = unname(suppressWarnings(ks.test(S, B)$statistic)))
 }
 
-vars <- c("trackScore", "phoScore", "elScore", "showerdEdx", "showerOpAngle", "pScore")  # ajusta a tus columnas
+
+vars <- c("trackScore", "phoScore", "elScore", "showerdEdx", "showerOpAngle", "pScore")
 vars <- intersect(vars, names(data_min_trackScore))
 
-res_ks <- bind_rows(lapply(vars, ks_D, datos = data_min_trackScore)) %>%
-  arrange(desc(D))
+res_ks <- bind_rows(lapply(vars, ks_D, datos = data_min_trackScore))
 
 res_ks
+
+
+largo <- data_min_trackScore %>%
+  select(all_of(vars), nPi0) %>%
+  mutate(clase = ifelse(nPi0 == 1, "Señal", "Background")) %>%
+  pivot_longer(all_of(vars), names_to = "variable", values_to = "valor") %>%
+  filter(!is.na(valor))
+
+ggplot(largo, aes(valor, colour = clase)) +
+  stat_ecdf(geom = "step") +
+  facet_wrap(~ variable, scales = "free_x") +
+  labs(x = NULL, y = "Fracción acumulada", colour = NULL,
+       title = "Acumuladas señal vs background") +
+  theme_bw()
 
 
 #Test chi cuadrado
