@@ -49,8 +49,8 @@ res_cortes %>%
 #Ahora lo hacemos para phoScore. En este caso, la señal seleccionada será por encima
 #del corte.
 
-phoScore_senal <- data_min_trackScore$phoScore[data_min_trackScore$nPi0 == 1]
-phoScore_bckg <- data_min_trackScore$phoScore[data_min_trackScore$nPi0 != 1]
+phoScore_senal <- data_min_trackScore$phoScore[data_min_trackScore$nPi0 == 1 & data_min_trackScore$trackScore < 0.44 & data_min_trackScore$phoScore > 0]
+phoScore_bckg <- data_min_trackScore$phoScore[data_min_trackScore$nPi0 != 1 & data_min_trackScore$trackScore < 0.44 & data_min_trackScore$phoScore > 0]
 cortes2 <- seq(min(data_min_trackScore$phoScore), max(data_min_trackScore$phoScore), length.out = 200)
 
 
